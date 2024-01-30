@@ -89,3 +89,56 @@ post("/process_single_message") do
 
   erb(:message_results)
 end
+
+get("/chat") do
+  # cookies_array_json = cookies["chat_history"]
+  # @cookies_array = JSON.parse(cookies_array_json)
+  if cookies.key?("chat_history") 
+    cookies_array_json = cookies["chat_history"]
+    @cookies_array = JSON.parse(cookies_array_json)
+  end
+  erb(:chat)
+end
+
+post ("/add_message_to_chat") do
+  if cookies.key?("chat_history")
+    cookies_array_json = cookies["chat_history"]
+    cookies_array = JSON.parse(cookies_array_json)
+  else
+    cookies_array = []
+  end
+
+  chat_message = params["user_message"]
+  request_headers_hash = {
+    "Authorization" => "Bearer #{ENV.fetch("GPT")}",
+    "content-type" => "application/json"
+  }
+  request_body_hash = {
+    "model" => "gpt-3.5-turbo",
+    "messages" => [
+      {
+        "role" => "system",
+        "content" => "You are a helpful assistant"
+      },
+      {
+        "role" => "user",
+        "content" => chat_message
+      }
+    ]
+  }
+  request_body_json = JSON.generate(request_body_hash)
+  raw_response = HTTP.headers(request_headers_hash).post("https://api.openai.com/v1/chat/completions", :body => request_body_json)
+  parsed_response = JSON.parse(raw_response.to_s)
+  assistant_response = parsed_response.dig("choices", 0, "message", "content")
+  cookies_array.push({"role"=>"user", "content"=>chat_message})
+  cookies_array.push({"role"=>"assistant", "content" =>assistant_response})
+  cookies["chat_history"] = JSON.generate(cookies_array)
+
+  redirect("/chat")
+end
+
+post("/clear_chat") do
+  cookies.delete("chat_history")
+
+  redirect("/chat")
+end
