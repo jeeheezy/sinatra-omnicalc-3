@@ -1,6 +1,7 @@
 require "sinatra"
 require "sinatra/reloader"
 require "http"
+require "sinatra/cookies"
 
 get("/") do
   erb(:homepage)
@@ -55,4 +56,36 @@ post("/process_umbrella") do
   end
 
   erb(:umbrella_results)
+end
+
+get("/message") do
+  erb(:message_form)
+end
+
+post("/process_single_message") do
+  @message = params["message"]
+  request_headers_hash = {
+    "Authorization" => "Bearer #{ENV.fetch("GPT")}",
+    "content-type" => "application/json"
+  }
+  request_body_hash = {
+    "model" => "gpt-3.5-turbo",
+    "messages" => [
+      {
+        "role" => "system",
+        "content" => "You are a helpful assistant who talks like Shakespeare"
+      },
+      {
+        "role" => "user",
+        "content" => @message
+      }
+    ]
+  }
+  request_body_json = JSON.generate(request_body_hash)
+  raw_response = HTTP.headers(request_headers_hash).post("https://api.openai.com/v1/chat/completions", :body => request_body_json)
+  parsed_response = JSON.parse(raw_response.to_s)
+
+  @content_from_response = parsed_response.dig("choices", 0, "message", "content")
+
+  erb(:message_results)
 end
